@@ -1,0 +1,259 @@
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
+data class Contato(
+    var nome: String, 
+    var telefone: String, 
+    val data: LocalDateTime = LocalDateTime.now(),
+    var isEmergencia: Boolean = false
+)
+
+data class Grupo(
+    var nome: String,
+    val dataCriacao: LocalDateTime = LocalDateTime.now(),
+    val membros: MutableMap<Int, LocalDateTime> = mutableMapOf(),
+    val historicoRemovidos: MutableList<String> = mutableListOf()
+)
+
+val agenda: MutableMap<Int, Contato> = mutableMapOf()
+val grupos: MutableMap<String, Grupo> = mutableMapOf()
+
+fun main() {
+    do {
+        exibirMenu()
+        val opcao = readln().toIntOrNull() ?: -1
+        when (opcao) {
+            1 -> if (!adicionar()) return
+            2 -> if (!buscar()) return
+            3 -> if (!listar()) return
+            4 -> if (!atualizar()) return
+            5 -> if (!remover()) return
+            6 -> if (!mais()) return
+            0 -> { println("\nFechando a agenda!"); return }
+            else -> println("\nOpção inválida! Tente novamente.")
+        }
+    } while (true)
+}
+
+fun continuar(): Boolean {
+    println("\n-------------------------------------------")
+    println("Digite 1 para voltar ao menu principal ou 0 para fechar o programa:")
+    return readln().toIntOrNull() != 0
+}
+
+fun exibirMenu() {
+    println("""
+        --- GERENCIADOR DE CONTATOS ---
+        1 - Adicionar contato
+        2 - Buscar contato (por ID)
+        3 - Listar contatos (ordenados)
+        4 - Atualizar contato
+        5 - Remover contato
+        6 - Mais (+)
+        0 - Sair
+        -------------------------------
+        Escolha uma opção: 
+    """.trimIndent())
+}
+
+fun adicionar(): Boolean {
+    print("Digite o ID: ")
+    val id = readln().toIntOrNull()
+    if (id == null || id <= 0) { println("Erro: ID inválido."); return continuar() }
+    if (agenda.containsKey(id)) { println("Erro: ID já existe."); return continuar() }
+    
+    print("Digite o nome: ")
+    val nome = readln().trim()
+    
+    if (nome.isEmpty() || nome.any { it.isDigit() }) { 
+        println("Erro: O nome não pode ser vazio ou conter números.")
+        return continuar() 
+    }
+    
+    if (agenda.values.any { it.nome === nome }) { println("Erro: Nome já cadastrado."); return continuar() }
+    
+    print("Digite o telefone: ")
+    val tel = readln().trim().filter { it.isDigit() }
+    if (tel.length == 11 && tel.getOrNull(2) == '9') {
+        agenda[id] = Contato(nome, tel)
+        println("Contato adicionado com sucesso!")
+    } else println("Erro: Número inválido, deve conter o DDD e o 9 logo após, antes do número.")
+    return continuar()
+}
+
+fun formatarTelefone(tel: String) = "(${tel.substring(0, 2)}) ${tel.substring(2, 7)}-${tel.substring(7)}"
+
+fun listar(): Boolean {
+    if (agenda.isEmpty()) { println("Agenda vazia."); return continuar() }
+    println("\n--- LISTA DE CONTATOS (Total: ${agenda.size}) ---")
+    agenda.toSortedMap().forEach { (id, c) ->
+        val gruposEmComum = grupos.filter { it.value.membros.containsKey(id) }.map { it.key }
+        val printGrupos = if (gruposEmComum.isNotEmpty()) " | Grupos: ${gruposEmComum.joinToString(", ")}" else ""
+        println("ID: $id | Nome: ${c.nome}$printGrupos | Tel: ${formatarTelefone(c.telefone)}")
+    }
+    return continuar()
+}
+
+fun buscar(): Boolean {
+    print("ID: "); val id = readln().toIntOrNull()
+    agenda[id]?.let {
+        val par: Pair<String, String> = Pair(it.nome, it.telefone)
+        println("Encontrado: ${par.first} | ${formatarTelefone(par.second)}")
+    } ?: println("Não encontrado.")
+    return continuar()
+}
+
+fun atualizar(): Boolean {
+    print("ID: "); val id = readln().toIntOrNull()
+    val c = agenda[id] ?: run { println("Não encontrado."); return continuar() }
+    
+    print("Novo nome: "); val n = readln().trim()
+    if (n.isNotEmpty()) {
+        if (n.any { it.isDigit() }) {
+            println("Erro: Nome não pode conter números.")
+        } else {
+            c.nome = n
+        }
+    }
+    
+    print("Novo telefone: "); val t = readln().trim().filter { it.isDigit() }
+    if (t.length == 11 && t.getOrNull(2) == '9') c.telefone = t
+    
+    println("Processo de atualização finalizado!")
+    return continuar()
+}
+
+fun remover(): Boolean {
+    print("ID para remover: "); val id = readln().toIntOrNull()
+    if (agenda.containsKey(id)) {
+        agenda.remove(id)
+        grupos.values.forEach { it.membros.remove(id) }
+        println("Removido!")
+    } else println("Não encontrado.")
+    return continuar()
+}
+
+fun mais(): Boolean {
+    println("""
+        --- OPÇÕES ADICIONAIS ---
+        1 - Grupos
+        2 - Contatos de emergência
+        3 - Detalhes
+        0 - Voltar
+        -------------------------
+        Escolha uma opção: 
+    """.trimIndent())
+    when (readln().toIntOrNull()) {
+        1 -> menuGrupos()
+        2 -> menuCemergencia()
+        3 -> verDetalhes()
+    }
+    return if (agenda.isEmpty() && grupos.isEmpty()) true else continuar()
+}
+
+fun verDetalhes() {
+    val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")
+    println("""
+        --- DETALHES GERAIS ---
+        Contatos totais: ${agenda.size}
+        -----------------------
+    """.trimIndent())
+    agenda.toSortedMap().forEach { (id, c) ->
+        val tagSós = if (c.isEmergencia) " [EMERGÊNCIA]" else ""
+        println("ID: $id | Nome: ${c.nome}$tagSós | Criado em: ${c.data.format(formatter)}")
+    }
+}
+
+fun menuGrupos() {
+    val fmt = DateTimeFormatter.ofPattern("dd/MM/yy HH:mm:ss")
+    println("""
+        --- GERENCIAR GRUPOS ---
+        1 - Criar grupo
+        2 - Detalhes dos grupos
+        3 - Adicionar membro (ID)
+        4 - Remover membro (ID)
+        5 - Renomear grupo
+        0 - Voltar
+        ------------------------
+        Escolha uma opção: 
+    """.trimIndent())
+    when (readln().toIntOrNull()) {
+        1 -> {
+            print("Nome do Grupo: "); val n = readln().trim()
+            if (n.any { it.isDigit() }) println("Erro: Nome do grupo não pode ter números.")
+            else { grupos[n] = Grupo(n); println("Grupo criado!") }
+        }
+        2 -> {
+            if (grupos.isEmpty()) println("Sem grupos cadastrados.")
+            grupos.forEach { (nome, g) ->
+                println("\nGRUPO: $nome | Criado: ${g.dataCriacao.format(fmt)}")
+                println(" Membros: ${g.membros.size}")
+                g.membros.forEach { (id, data) -> 
+                    println("  -> ${agenda[id]?.nome} (Desde: ${data.format(fmt)})")
+                }
+                if (g.historicoRemovidos.isNotEmpty()) {
+                    println(" Histórico: ${g.historicoRemovidos.joinToString(" | ")}")
+                }
+            }
+        }
+        3 -> {
+            print("Grupo: "); val gNome = readln().trim()
+            print("ID: "); val id = readln().toIntOrNull() ?: 0
+            if (grupos.containsKey(gNome) && agenda.containsKey(id)) {
+                grupos[gNome]?.membros?.set(id, LocalDateTime.now())
+                println("Adicionado!")
+            } else println("Erro: Dados não encontrados.")
+        }
+        4 -> {
+            print("Grupo: "); val gNome = readln().trim()
+            print("ID: "); val id = readln().toIntOrNull() ?: 0
+            val g = grupos[gNome]
+            if (g != null && g.membros.containsKey(id)) {
+                val log = "${agenda[id]?.nome} (${LocalDateTime.now().format(fmt)})"
+                g.membros.remove(id)
+                g.historicoRemovidos.add(log)
+                println("Removido e registrado!")
+            }
+        }
+        5 -> {
+            print("Nome atual: "); val atual = readln().trim()
+            if (grupos.containsKey(atual)) {
+                print("Novo nome: "); val novo = readln().trim()
+                if (novo.any { it.isDigit() }) println("Erro: Nome não pode ter números.")
+                else {
+                    val g = grupos.remove(atual)!!
+                    g.nome = novo
+                    grupos[novo] = g
+                    println("Renomeado!")
+                }
+            }
+        }
+    }
+}
+
+fun menuCemergencia() {
+    println("""
+        --- CONTATOS DE EMERGÊNCIA ---
+        1 - Adicionar contato de emergência
+        2 - Remover contato de emergência
+        3 - Listar contatos de emergências
+        0 - Voltar
+        ------------------------------
+        Escolha uma opção: 
+    """.trimIndent())
+    when (readln().toIntOrNull()) {
+        1 -> {
+            print("ID para adicionar: "); val id = readln().toIntOrNull()
+            agenda[id]?.let { it.isEmergencia = true; println("${it.nome} agora é um contato de emergência!") } ?: println("ID não encontrado.")
+        }
+        2 -> {
+            print("ID para remover: "); val id = readln().toIntOrNull()
+            agenda[id]?.let { it.isEmergencia = false; println("${it.nome} removido como contato de emergência.") } ?: println("ID não encontrado.")
+        }
+        3 -> {
+            val lista = agenda.filter { it.value.isEmergencia }
+            if (lista.isEmpty()) println("Nenhum contato de emergência.")
+            else lista.forEach { (id, c) -> println("ID: $id | Nome: ${c.nome} | Tel: ${formatarTelefone(c.telefone)}") }
+        }
+    }
+}
