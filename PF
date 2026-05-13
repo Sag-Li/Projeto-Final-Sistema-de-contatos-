@@ -70,7 +70,7 @@ fun adicionar(): Boolean {
         return continuar() 
     }
     
-    if (agenda.values.any { it.nome === nome }) { println("Erro: Nome já cadastrado."); return continuar() }
+    if (agenda.values.any { it.nome == nome }) { println("Erro: Nome já cadastrado."); return continuar() }
     
     print("Digite o telefone: ")
     val tel = readln().trim().filter { it.isDigit() }
@@ -159,8 +159,6 @@ fun verDetalhes() {
         -----------------------
     """.trimIndent())
     agenda.toSortedMap().forEach { (id, c) ->
-        val tagSós = if (c.isEmergencia) " [EMERGÊNCIA]" else ""
-        println("ID: $id | Nome: ${c.nome}$tagSós | Criado em: ${c.data.format(formatter)}")
     }
 }
 
